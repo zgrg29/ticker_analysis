@@ -171,8 +171,12 @@ for _, group in df.groupby("Block"):
   start_t = group.index[0]
   end_t = group.index[-1]
   state = group["Color_State"].iloc[0]
+
+  # 修复：防止单日区间宽度为0无法渲染，统一向后延伸一天确保色块能正常显示
+  end_t = end_t + pd.Timedelta(days=1)
+
   fill_color = (
-      "rgba(40, 167, 69, 0.15)" if state == "Green" else "rgba(220, 53, 69, 0.15)"
+      "rgba(40, 167, 69, 0.2)" if state == "Green" else "rgba(220, 53, 69, 0.2)"
   )
   fig.add_vrect(
       x0=start_t,
