@@ -34,8 +34,8 @@ start_date = st.sidebar.date_input("开始日期", value=default_start)
 end_date = st.sidebar.date_input("结束日期", value=default_end)
 
 if start_date >= end_date:
-    st.sidebar.error("错误：开始日期必须早于结束日期！")
-    st.stop()
+  st.sidebar.error("错误：开始日期必须早于结束日期！")
+  st.stop()
 
 
 # ----------------- 数据获取与指标计算函数 -----------------
@@ -50,74 +50,59 @@ def load_and_calculate_data(ticker_symbol, start, end):
   if df.empty or len(df) < 50:
     return None
 
-  # 适配多级表头（yfinance 新版可能会返回 MultiIndex）
+  # 适配多级表头
   if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
-  # 确保列名标准
   df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
   df.dropna(inplace=True)
 
   # --- 计算 12 个技术指标 ---
-  # 1. 价格与短期均线 SMA20
   df["SMA20"] = df["Close"].rolling(window=20).mean()
   df["Ind_SMA20"] = np.where(df["Close"] > df["SMA20"], 1, -1)
 
-  # 2. 价格与中期均线 SMA50
   df["SMA50"] = df["Close"].rolling(window=50).mean()
   df["Ind_SMA50"] = np.where(df["Close"] > df["SMA50"], 1, -1)
 
-  # 3. 价格与长期均线 SMA200
   df["SMA200"] = df["Close"].rolling(window=200).mean()
   df["Ind_SMA200"] = np.where(df["Close"] > df["SMA200"], 1, -1)
 
-  # 4. 均线交叉 SMA20 vs SMA50
   df["Ind_SMA_Cross"] = np.where(df["SMA20"] > df["SMA50"], 1, -1)
 
-  # 5. EMA 12 vs EMA 26 (MACD 趋势方向)
   df["EMA12"] = df["Close"].ewm(span=12, adjust=False).mean()
   df["EMA26"] = df["Close"].ewm(span=26, adjust=False).mean()
   df["Ind_EMA"] = np.where(df["EMA12"] > df["EMA26"], 1, -1)
 
-  # 6. MACD 柱状图
   df["MACD_Line"] = df["EMA12"] - df["EMA26"]
   df["MACD_Signal"] = df["MACD_Line"].ewm(span=9, adjust=False).mean()
   df["MACD_Hist"] = df["MACD_Line"] - df["MACD_Signal"]
   df["Ind_MACD_Hist"] = np.where(df["MACD_Hist"] > 0, 1, -1)
 
-  # 7. RSI (14)
   delta = df["Close"].diff()
   gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
   loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
   rs = gain / loss
   df["RSI"] = 100 - (100 / (1 + rs))
-  # RSI > 50 为多头，< 50 为空头
   df["Ind_RSI"] = np.where(df["RSI"] > 50, 1, -1)
 
-  # 8. 布林带中轨判断
   df["BB_Middle"] = df["Close"].rolling(window=20).mean()
   df["Ind_BB"] = np.where(df["Close"] > df["BB_Middle"], 1, -1)
 
-  # 9. 动量指标 Momentum (10日)
   df["Mom"] = df["Close"].diff(10)
   df["Ind_Mom"] = np.where(df["Mom"] > 0, 1, -1)
 
-  # 10. 变化率 ROC (10日)
   df["ROC"] = df["Close"].pct_change(10) * 100
   df["Ind_ROC"] = np.where(df["ROC"] > 0, 1, -1)
 
-  # 11. 成交量与20日均量对比
   df["Vol_SMA20"] = df["Volume"].rolling(window=20).mean()
   df["Ind_Vol"] = np.where(df["Volume"] > df["Vol_SMA20"], 1, -1)
 
-  # 12. 20日高低点突破 (收盘价是否高于近20日均价或突破)
   df["High20"] = df["High"].rolling(window=20).max()
   df["Low20"] = df["Low"].rolling(window=20).min()
   df["Ind_Channel"] = np.where(
       df["Close"] > (df["High20"] + df["Low20"]) / 2, 1, -1
   )
 
-  # 汇总指标列表
   ind_cols = [
       ("收盘价 > SMA20", "Ind_SMA20"),
       ("收盘价 > SMA50", "Ind_SMA50"),
@@ -133,12 +118,10 @@ def load_and_calculate_data(ticker_symbol, start, end):
       ("价格处于20日通道中上轨", "Ind_Channel"),
   ]
 
-  # 提取指标得分矩阵
   score_df = pd.DataFrame(index=df.index)
   for name, col in ind_cols:
     score_df[name] = df[col]
 
-  # 计算每日净指标得分 (上涨指标数 - 下跌指标数)
   df["Net_Score"] = score_df.sum(axis=1)
   df["Total_Indicators"] = len(ind_cols)
 
@@ -165,14 +148,93 @@ if df.empty:
   st.warning("所选日期范围内没有足够的数据，请调整开始和结束日期。")
   st.stop()
 
-# ----------------- 1. 最新指标状态展示 -----------------
+
+# ----------------- 1. 历史趋势双图展示（置顶） -----------------
+st.subheader(f"📈 {ticker} 历史指标净得分与价格走势")
+
+fig = make_subplots(
+    rows=2,
+    cols=1,
+    shared_xaxes=True,
+    vertical_spacing=0.08,
+    subplot_titles=(
+        f"{ticker} 资产价格走势（背景红绿分界）",
+        "多空净指标得分历史（上涨指标数 - 下跌指标数）",
+    ),
+)
+
+# 动态计算连续的红/绿区间，用于在价格子图背景中渲染色块
+df["Color_State"] = np.where(df["Net_Score"] >= 0, "Green", "Red")
+df["Block"] = (df["Color_State"] != df["Color_State"].shift()).cumsum()
+
+for _, group in df.groupby("Block"):
+  start_t = group.index[0]
+  end_t = group.index[-1]
+  state = group["Color_State"].iloc[0]
+  fill_color = (
+      "rgba(40, 167, 69, 0.15)" if state == "Green" else "rgba(220, 53, 69, 0.15)"
+  )
+  fig.add_vrect(
+      x0=start_t,
+      x1=end_t,
+      fillcolor=fill_color,
+      opacity=1,
+      layer="below",
+      line_width=0,
+      row=1,
+      col=1,
+  )
+
+# 子图 1：价格折线图
+fig.add_trace(
+    go.Scatter(
+        x=df.index,
+        y=df["Close"],
+        mode="lines",
+        name="收盘价 (Close)",
+        line=dict(color="#1f77b4", width=2),
+    ),
+    row=1,
+    col=1,
+)
+
+# 子图 2：净得分柱状图
+bar_colors = ["#28a745" if val >= 0 else "#dc3545" for val in df["Net_Score"]]
+fig.add_trace(
+    go.Bar(
+        x=df.index,
+        y=df["Net_Score"],
+        name="净得分 (Score)",
+        marker_color=bar_colors,
+    ),
+    row=2,
+    col=1,
+)
+
+fig.add_hline(y=0, line_dash="dash", line_color="gray", row=2, col=1)
+
+fig.update_layout(
+    height=600,
+    margin=dict(l=20, r=20, t=40, b=20),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    template="plotly_white",
+)
+
+fig.update_yaxes(title_text="价格 (USD)", row=1, col=1)
+fig.update_yaxes(title_text="净得分", row=2, col=1)
+
+st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("---")
+
+
+# ----------------- 2. 最新指标状态展示（放下方） -----------------
 st.subheader(f"📌 {ticker} 最新技术指标状态面板")
 latest_date = df.index[-1].strftime("%Y-%m-%d")
 st.caption(f"数据截止日期：{latest_date}")
 
 latest_scores = score_df.iloc[-1]
 
-# 用 4 列排布 12 个指标
 cols = st.columns(4)
 for i, (name, col_key) in enumerate(ind_cols):
   val = latest_scores[name]
@@ -207,62 +269,3 @@ st.info(
     f"💡 **综合多空盘点**：在全部 **{total_count}** 个指标中，当前共有 **{bullish_count}** 个看涨指标、"
     f"**{bearish_count}** 个看跌指标。净得分为 **{int(total_net)}**（满分 +{total_count} / 最低 -{total_count}）。"
 )
-
-st.markdown("---")
-
-# ----------------- 2. 历史趋势双图展示 -----------------
-st.subheader(f"📈 {ticker} 历史指标净得分与价格走势")
-
-# 使用 Plotly 绘制上下双子图
-fig = make_subplots(
-    rows=2,
-    cols=1,
-    shared_xaxes=True,
-    vertical_spacing=0.08,
-    subplot_titles=(
-        f"{ticker} 资产价格走势",
-        "多空净指标得分历史（上涨指标数 - 下跌指标数）",
-    ),
-)
-
-# 子图 1：价格折线图
-fig.add_trace(
-    go.Scatter(
-        x=df.index,
-        y=df["Close"],
-        mode="lines",
-        name="收盘价 (Close)",
-        line=dict(color="#1f77b4", width=2),
-    ),
-    row=1,
-    col=1,
-)
-
-# 子图 2：净得分柱状图/折线图
-colors = ["#28a745" if val >= 0 else "#dc3545" for val in df["Net_Score"]]
-fig.add_trace(
-    go.Bar(
-        x=df.index,
-        y=df["Net_Score"],
-        name="净得分 (Score)",
-        marker_color=colors,
-    ),
-    row=2,
-    col=1,
-)
-
-# 添加中轴线 0
-fig.add_hline(y=0, line_dash="dash", line_color="gray", row=2, col=1)
-
-# 更新布局
-fig.update_layout(
-    height=600,
-    margin=dict(l=20, r=20, t=40, b=20),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    template="plotly_white",
-)
-
-fig.update_yaxes(title_text="价格 (USD)", row=1, col=1)
-fig.update_yaxes(title_text="净得分", row=2, col=1)
-
-st.plotly_chart(fig, use_container_width=True)
