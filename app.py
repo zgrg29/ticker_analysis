@@ -11,17 +11,128 @@ st.set_page_config(
     page_title="多指标量化看板与历史回测", page_icon="📈", layout="wide"
 )
 
-st.title("📊 金融标的技术指标量化看板与历史信号分析")
-st.markdown(
-    "通过计算 **12个经典技术指标** 的多空状态（牛市/上涨信号为 +1，熊市/下跌信号为 -1），"
-    "实时评估当前市场情绪，并可回溯历史指标得分与价格的走势关系。"
-)
+# ----------------- 多语言词典定义 -----------------
+TEXTS = {
+    "中文": {
+        "title": "📊 金融标的技术指标量化看板与历史信号分析",
+        "desc": (
+            "通过计算 **12个经典技术指标**"
+            " 的多空状态（牛市/上涨信号为 +1，熊市/下跌信号为 -1），"
+            "实时评估当前市场情绪，并可回溯历史指标得分与价格的走势关系。"
+        ),
+        "sidebar_header": "参数配置",
+        "lang_label": "选择语言 (Language)",
+        "ticker_label": "输入标的代码 (Ticker)",
+        "start_date": "开始日期",
+        "end_date": "结束日期",
+        "date_error": "错误：开始日期必须早于结束日期！",
+        "spinner": "正在获取 {ticker} 数据并计算技术指标...",
+        "fetch_error": (
+            "未能获取到标的 **{ticker}** 的有效数据，请检查代码拼写或尝试其他标的。"
+        ),
+        "data_empty": "所选日期范围内没有足够的数据，请调整开始和结束日期。",
+        "hist_sub": "📈 {ticker} 历史指标净得分与价格走势",
+        "sub1_title": "{ticker} 资产价格走势（背景红绿分界）",
+        "sub2_title": "多空净指标得分历史（上涨指标数 - 下跌指标数）",
+        "close_name": "收盘价 (Close)",
+        "score_name": "净得分 (Score)",
+        "price_yaxis": "价格 (USD)",
+        "score_yaxis": "净得分",
+        "latest_sub": "📌 {ticker} 最新技术指标状态面板",
+        "data_date": "数据截止日期：{latest_date}",
+        "bullish": "🟢 上涨信号 (+1)",
+        "bearish": "🔴 下跌信号 (-1)",
+        "summary_info": (
+            "💡 **综合多空盘点**：在全部 **{total_count}** 个指标中，当前共有"
+            " **{bullish_count}** 个看涨指标、**{bearish_count}** 个看跌指标。"
+            "净得分为 **{int_total_net}**（满分 +{total_count} / 最低"
+            " -{total_count}）。"
+        ),
+        # 12个指标名称（中/日）
+        "ind_names": [
+            "收盘价 > SMA20",
+            "收盘价 > SMA50",
+            "收盘价 > SMA200",
+            "SMA20 > SMA50 (均线多头)",
+            "EMA12 > EMA26",
+            "MACD 柱状图 > 0",
+            "RSI(14) > 50",
+            "收盘价 > 布林带中轨",
+            "10日动量 Momentum > 0",
+            "10日变化率 ROC > 0",
+            "成交量 > 20日均量",
+            "价格处于20日通道中上轨",
+        ],
+    },
+    "日本語": {
+        "title": "📊 金融銘柄 テクニカル指標クオンツダッシュボード＆歴史的シグナル分析",
+        "desc": (
+            "**12個のクラシックなテクニカル指標**"
+            "の強気・弱気状態（上昇シグナル：+1、下落シグナル：-1）を計算し、"
+            "現在の市場心理をリアルタイムで評価し、過去の指標スコアと価格の推移の関係を振り返ります。"
+        ),
+        "sidebar_header": "パラメータ設定",
+        "lang_label": "言語選択 (Language)",
+        "ticker_label": "銘柄コードを入力 (Ticker)",
+        "start_date": "開始日",
+        "end_date": "終了日",
+        "date_error": "エラー：開始日は終了日より前である必要があります！",
+        "spinner": "{ticker} のデータを取得し、テクニカル指標を計算中...",
+        "fetch_error": (
+            "銘柄 **{ticker}**"
+            " の有効なデータを取得できませんでした。コードを確認するか、別の銘柄をお試しください。"
+        ),
+        "data_empty": (
+            "選択された日付範囲に十分なデータがありません。開始日と終了日を調整してください。"
+        ),
+        "hist_sub": "📈 {ticker} 過去の指標純スコアと価格推移",
+        "sub1_title": "{ticker} 資産価格推移（背景の赤緑区分け）",
+        "sub2_title": "強気・弱気純指標スコア履歴（上昇指標数 - 下落指標数）",
+        "close_name": "終値 (Close)",
+        "score_name": "純スコア (Score)",
+        "price_yaxis": "価格 (USD)",
+        "score_yaxis": "純スコア",
+        "latest_sub": "📌 {ticker} 最新テクニカル指標ステータスパネル",
+        "data_date": "データ基準日：{latest_date}",
+        "bullish": "🟢 上昇シグナル (+1)",
+        "bearish": "🔴 下落シグナル (-1)",
+        "summary_info": (
+            "💡 **総合強弱まとめ**：全 **{total_count}**"
+            " 個の指標のうち、現在強気指標が **{bullish_count}** 個、弱気指標が"
+            " **{bearish_count}** 個あります。純スコアは **{int_total_net}**"
+            " です（最高 +{total_count} / 最低 -{total_count}）。"
+        ),
+        "ind_names": [
+            "終値 > SMA20",
+            "終値 > SMA50",
+            "終値 > SMA200",
+            "SMA20 > SMA50 (ゴールデンクロス)",
+            "EMA12 > EMA26",
+            "MACD ヒストグラム > 0",
+            "RSI(14) > 50",
+            "終値 > ボリンジャーバンド中値",
+            "10日モメンタム Momentum > 0",
+            "10日変化率 ROC > 0",
+            "出来高 > 20日平均出来高",
+            "価格が20日チャネルの中上軌道に位置",
+        ],
+    },
+}
 
-# ----------------- 侧边栏配置 -----------------
-st.sidebar.header("参数配置")
+# ----------------- 侧边栏：语言选择 -----------------
+st.sidebar.header("参数配置 / パラメータ設定")
+lang_choice = st.sidebar.selectbox("语言 / Language", ["中文", "日本語"], index=0)
+t = TEXTS[lang_choice]  # 当前语言的文本字典
+
+# 标题与描述
+st.title(t["title"])
+st.markdown(t["desc"])
+
+# ----------------- 侧边栏其他配置 -----------------
+st.sidebar.header(t["sidebar_header"])
 default_ticker = "QQQ"
 ticker = (
-    st.sidebar.text_input("输入标的代码 (Ticker)", value=default_ticker)
+    st.sidebar.text_input(t["ticker_label"], value=default_ticker)
     .upper()
     .strip()
 )
@@ -30,18 +141,17 @@ ticker = (
 default_start = datetime.date.today() - datetime.timedelta(days=180)
 default_end = datetime.date.today()
 
-start_date = st.sidebar.date_input("开始日期", value=default_start)
-end_date = st.sidebar.date_input("结束日期", value=default_end)
+start_date = st.sidebar.date_input(t["start_date"], value=default_start)
+end_date = st.sidebar.date_input(t["end_date"], value=default_end)
 
 if start_date >= end_date:
-  st.sidebar.error("错误：开始日期必须早于结束日期！")
+  st.sidebar.error(t["date_error"])
   st.stop()
 
 
 # ----------------- 数据获取与指标计算函数 -----------------
 @st.cache_data(ttl=3600)
 def load_and_calculate_data(ticker_symbol, start, end):
-  # 额外多取一些历史数据用于均线计算（如200日均线）
   fetch_start = pd.to_datetime(start) - pd.Timedelta(days=300)
   df = yf.download(
       ticker_symbol, start=fetch_start, end=end, progress=False, auto_adjust=True
@@ -50,7 +160,6 @@ def load_and_calculate_data(ticker_symbol, start, end):
   if df.empty or len(df) < 50:
     return None
 
-  # 适配多级表头
   if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
@@ -103,54 +212,54 @@ def load_and_calculate_data(ticker_symbol, start, end):
       df["Close"] > (df["High20"] + df["Low20"]) / 2, 1, -1
   )
 
-  ind_cols = [
-      ("收盘价 > SMA20", "Ind_SMA20"),
-      ("收盘价 > SMA50", "Ind_SMA50"),
-      ("收盘价 > SMA200", "Ind_SMA200"),
-      ("SMA20 > SMA50 (均线多头)", "Ind_SMA_Cross"),
-      ("EMA12 > EMA26", "Ind_EMA"),
-      ("MACD 柱状图 > 0", "Ind_MACD_Hist"),
-      ("RSI(14) > 50", "Ind_RSI"),
-      ("收盘价 > 布林带中轨", "Ind_BB"),
-      ("10日动量 Momentum > 0", "Ind_Mom"),
-      ("10日变化率 ROC > 0", "Ind_ROC"),
-      ("成交量 > 20日均量", "Ind_Vol"),
-      ("价格处于20日通道中上轨", "Ind_Channel"),
-  ]
-
-  score_df = pd.DataFrame(index=df.index)
-  for name, col in ind_cols:
-    score_df[name] = df[col]
-
-  df["Net_Score"] = score_df.sum(axis=1)
-  df["Total_Indicators"] = len(ind_cols)
-
-  # 裁剪用户选择的日期区间
-  df = df.loc[pd.to_datetime(start) : pd.to_datetime(end)]
-  score_df = score_df.loc[pd.to_datetime(start) : pd.to_datetime(end)]
-
-  return df, score_df, ind_cols
+  return df
 
 
-# 加载数据
-with st.spinner(f"正在获取 {ticker} 数据并计算技术指标..."):
-  result = load_and_calculate_data(ticker, start_date, end_date)
+# 获取原始数据
+with st.spinner(t["spinner"].format(ticker=ticker)):
+  df_raw = load_and_calculate_data(ticker, start_date, end_date)
 
-if result is None:
-  st.error(
-      f"未能获取到标的 **{ticker}** 的有效数据，请检查代码拼写或尝试其他标的。"
-  )
+if df_raw is None:
+  st.error(t["fetch_error"].format(ticker=ticker))
   st.stop()
 
-df, score_df, ind_cols = result
+# 绑定当前语言的指标名称
+ind_keys = [
+    "Ind_SMA20",
+    "Ind_SMA50",
+    "Ind_SMA200",
+    "Ind_SMA_Cross",
+    "Ind_EMA",
+    "Ind_MACD_Hist",
+    "Ind_RSI",
+    "Ind_BB",
+    "Ind_Mom",
+    "Ind_ROC",
+    "Ind_Vol",
+    "Ind_Channel",
+]
+ind_names = t["ind_names"]
+ind_cols_mapping = list(zip(ind_names, ind_keys))
+
+score_df = pd.DataFrame(index=df_raw.index)
+for name, col in ind_cols_mapping:
+  score_df[name] = df_raw[col]
+
+df_raw["Net_Score"] = score_df.sum(axis=1)
+
+# 裁剪用户选择的日期区间
+df = df_raw.loc[pd.to_datetime(start_date) : pd.to_datetime(end_date)].copy()
+score_df = score_df.loc[
+    pd.to_datetime(start_date) : pd.to_datetime(end_date)
+].copy()
 
 if df.empty:
-  st.warning("所选日期范围内没有足够的数据，请调整开始和结束日期。")
+  st.warning(t["data_empty"])
   st.stop()
 
 
 # ----------------- 1. 历史趋势双图展示（置顶） -----------------
-st.subheader(f"📈 {ticker} 历史指标净得分与价格走势")
+st.subheader(t["hist_sub"].format(ticker=ticker))
 
 fig = make_subplots(
     rows=2,
@@ -158,22 +267,19 @@ fig = make_subplots(
     shared_xaxes=True,
     vertical_spacing=0.08,
     subplot_titles=(
-        f"{ticker} 资产价格走势（背景红绿分界）",
-        "多空净指标得分历史（上涨指标数 - 下跌指标数）",
+        t["sub1_title"].format(ticker=ticker),
+        t["sub2_title"],
     ),
 )
 
-# 动态计算连续的红/绿区间，用于在价格子图背景中渲染色块
+# 动态计算连续的红/绿区间
 df["Color_State"] = np.where(df["Net_Score"] >= 0, "Green", "Red")
 df["Block"] = (df["Color_State"] != df["Color_State"].shift()).cumsum()
 
 for _, group in df.groupby("Block"):
   start_t = group.index[0]
-  end_t = group.index[-1]
+  end_t = group.index[-1] + pd.Timedelta(days=1)
   state = group["Color_State"].iloc[0]
-
-  # 修复：防止单日区间宽度为0无法渲染，统一向后延伸一天确保色块能正常显示
-  end_t = end_t + pd.Timedelta(days=1)
 
   fill_color = (
       "rgba(40, 167, 69, 0.2)" if state == "Green" else "rgba(220, 53, 69, 0.2)"
@@ -195,7 +301,7 @@ fig.add_trace(
         x=df.index,
         y=df["Close"],
         mode="lines",
-        name="收盘价 (Close)",
+        name=t["close_name"],
         line=dict(color="#1f77b4", width=2),
     ),
     row=1,
@@ -208,7 +314,7 @@ fig.add_trace(
     go.Bar(
         x=df.index,
         y=df["Net_Score"],
-        name="净得分 (Score)",
+        name=t["score_name"],
         marker_color=bar_colors,
     ),
     row=2,
@@ -224,8 +330,8 @@ fig.update_layout(
     template="plotly_white",
 )
 
-fig.update_yaxes(title_text="价格 (USD)", row=1, col=1)
-fig.update_yaxes(title_text="净得分", row=2, col=1)
+fig.update_yaxes(title_text=t["price_yaxis"], row=1, col=1)
+fig.update_yaxes(title_text=t["score_yaxis"], row=2, col=1)
 
 st.plotly_chart(fig, use_container_width=True)
 
@@ -233,14 +339,14 @@ st.markdown("---")
 
 
 # ----------------- 2. 最新指标状态展示（放下方） -----------------
-st.subheader(f"📌 {ticker} 最新技术指标状态面板")
+st.subheader(t["latest_sub"].format(ticker=ticker))
 latest_date = df.index[-1].strftime("%Y-%m-%d")
-st.caption(f"数据截止日期：{latest_date}")
+st.caption(t["data_date"].format(latest_date=latest_date))
 
 latest_scores = score_df.iloc[-1]
 
 cols = st.columns(4)
-for i, (name, col_key) in enumerate(ind_cols):
+for i, (name, _) in enumerate(ind_cols_mapping):
   val = latest_scores[name]
   with cols[i % 4]:
     if val > 0:
@@ -248,7 +354,7 @@ for i, (name, col_key) in enumerate(ind_cols):
           f"""
                 <div style="padding: 10px; border-radius: 6px; background-color: rgba(0, 255, 0, 0.08); border-left: 5px solid #28a745; margin-bottom: 10px;">
                     <strong style="font-size: 14px;">{name}</strong><br>
-                    <span style="color: #28a745; font-weight: bold; font-size: 16px;">🟢 上涨信号 (+1)</span>
+                    <span style="color: #28a745; font-weight: bold; font-size: 16px;">{t["bullish"]}</span>
                 </div>
                 """,
           unsafe_allow_html=True,
@@ -258,18 +364,22 @@ for i, (name, col_key) in enumerate(ind_cols):
           f"""
                 <div style="padding: 10px; border-radius: 6px; background-color: rgba(255, 0, 0, 0.08); border-left: 5px solid #dc3545; margin-bottom: 10px;">
                     <strong style="font-size: 14px;">{name}</strong><br>
-                    <span style="color: #dc3545; font-weight: bold; font-size: 16px;">🔴 下跌信号 (-1)</span>
+                    <span style="color: #dc3545; font-weight: bold; font-size: 16px;">{t["bearish"]}</span>
                 </div>
                 """,
           unsafe_allow_html=True,
       )
 
 total_net = latest_scores.sum()
-total_count = len(ind_cols)
+total_count = len(ind_cols_mapping)
 bullish_count = int((total_net + total_count) / 2)
 bearish_count = total_count - bullish_count
 
 st.info(
-    f"💡 **综合多空盘点**：在全部 **{total_count}** 个指标中，当前共有 **{bullish_count}** 个看涨指标、"
-    f"**{bearish_count}** 个看跌指标。净得分为 **{int(total_net)}**（满分 +{total_count} / 最低 -{total_count}）。"
+    t["summary_info"].format(
+        total_count=total_count,
+        bullish_count=bullish_count,
+        bearish_count=bearish_count,
+        int_total_net=int(total_net),
+    )
 )
